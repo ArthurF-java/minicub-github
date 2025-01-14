@@ -1,0 +1,32 @@
+name: Setup Minikube Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      button_name:
+        description: 'Setup Minikube'
+
+jobs:
+  setup-kind:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Minikube
+        run: |
+          curl -LO https://github.com/kubernetes/minikube/releases/latest/download/minikube-linux-amd64
+          sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+
+      - name: Create Minikube cluster
+        run: |
+          start=$(date +%s)
+          minikube start
+          end=$(date +%s)
+          proccess_time=$((end - start))
+          echo "Minikube setup time: $proccess_time seconds"
+          sleep 20
+
+      - name: Get nodes
+        run: minikube kubectl -- get po -A
+
+      - name: Get Kubernetes version
+        run: minikube kubectl version
