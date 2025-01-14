@@ -1,0 +1,36 @@
+name: Setup KinD Cluster
+
+on:
+  workflow_dispatch:
+    inputs:
+      button_name:
+        description: 'Setup KinD'
+
+jobs:
+  setup-kind:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install KinD
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Create KinD cluster
+        run: |
+          start=$(date +%s)
+          kind create cluster --name kind-cluster
+          end=$(date +%s)
+          proccess_time=$((end - start))
+          echo "KinD setup time: $proccess_time seconds"
+          sleep 100
+
+      - name: Check cluster
+        run: kubectl cluster-info --context kind-kind-cluster
+
+      - name: Get nodes
+        run: kubectl get nodes
+
+      - name: Get Kubernetes version
+        run: kubectl version
