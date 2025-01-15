@@ -1,0 +1,83 @@
+name: Check Kubernetes Pods and Notify Slack
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check-pods:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Set up SSH config
+        run: |
+          mkdir -p $HOME/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > $HOME/.ssh/id_rsa
+          chmod 600 $HOME/.ssh/id_rsa
+          echo "Host ec_bastion
+                HostName 178.124.206.53
+                User jump_sa
+                Port 32510
+                IdentityFile $HOME/.ssh/id_rsa
+                StrictHostKeyChecking no
+
+                Host k8s-master-host
+                HostName 192.168.208.15
+                User root
+                ProxyJump ec_bastion
+                IdentityFile $HOME/.ssh/id_rsa
+                StrictHostKeyChecking no" > $HOME/.ssh/config
+          chmod 600 $HOME/.ssh/config
+
+      - name: Test connection to bastion
+        run: ssh ec_bastion echo "Connected to bastion!"
+
+      - name: Test connection to k8s-master-host
+        run: ssh k8s-master-host echo "Connected to k8s-master-host!"
+
+      - name: Set up SSH tunnel
+        run: ssh -f -N -L 6443:127.0.0.1:6443 k8s-master-host
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        id: kubectl
+
+      - name: Create .kube directory
+        run: mkdir -p $HOME/.kube
+
+      - name: Set up Kubeconfig
+        run: echo "${{ secrets.KUBECONFIG }}" > $HOME/.kube/config
+
+      - name: Test Kubernetes connection
+        run: kubectl cluster-info
+
+      - name: Check pod status
+        id: pod-status
+        run: |
+          kubectl get pods --all-namespaces -o json | jq -r '.items[] | select(all(.status.containerStatuses[]?.state; has("running") | not)) | "\(.metadata.name)"' > failed_pods.txt
+
+      - name: Check if there are any failed pods
+        run: |
+          if [ -s failed_pods.txt ]; then
+            echo "Failed pods found"
+            echo "status=failed" >> $GITHUB_ENV
+            cat failed_pods.txt
+            FILE_CONTENT=$(cat failed_pods.txt | tr '\n' '\0' | sed 's/\x0/; /g')
+            echo "DATA=$FILE_CONTENT" >> $GITHUB_ENV
+            echo "${{ env.DATA }}"
+          else
+            echo "No failed pods"
+            echo "status=success" >> $GITHUB_ENV
+          fi
+
+      - name: Slack Notification
+        if: env.status == 'failed'
+        uses: rtCamp/action-slack-notify@v2
+        env:
+          SLACK_CHANNEL: afon-check
+          SLACK_COLOR: failure
+          SLACK_ICON: https://github.com/rtCamp.png?size=48
+          SLACK_MESSAGE: '${{ env.DATA }}'
+          SLACK_TITLE: 'Pods are failed:'
+          SLACK_USERNAME: fonichkin
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
