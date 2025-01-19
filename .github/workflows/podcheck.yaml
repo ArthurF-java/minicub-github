@@ -15,14 +15,14 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" | tr -d '\r' > $HOME/.ssh/id_rsa
           chmod 600 $HOME/.ssh/id_rsa
           echo "Host ec_bastion
-                HostName 178.124.206.53
-                User jump_sa
-                Port 32510
+                HostName ${{ secrets.BASTION_HOST }}
+                User ${{ secrets.BASTION_USER }}
+                Port ${{ secrets.BASTION_PORT }}
                 IdentityFile $HOME/.ssh/id_rsa
                 StrictHostKeyChecking no
 
                 Host k8s-master-host
-                HostName 192.168.208.15
+                HostName ${{ secrets.K8S_MASTER_IP }}
                 User root
                 ProxyJump ec_bastion
                 IdentityFile $HOME/.ssh/id_rsa
